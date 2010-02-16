@@ -1,4 +1,4 @@
-#!/usr/bin/perl -I..
+#!/usr/bin/perl
 
 ## Threat Intelligence Project client v1.0
 ## tip@rootedyour.com
@@ -38,9 +38,12 @@ my @event;
 
 unless ($file) { die "You need to define a unified template!\n"; }
 
-my $sids = get_snort_sids("/home/jj/Documents/Development/threatintel/alerts/sid-msg.map",
-                       "/home/jj/Documents/Development/threatintel/alerts/gen-msg.map");
-my $class = get_snort_classifications("/home/jj/Documents/Development/threatintel/alerts/classification.config");
+my $sidMsgMap = $ARGV[0] || die "You need to specify a sid-msg.map file";
+my $genMsgMap = $ARGV[1] || die "You need to specify a gen-msg.map file";
+my $classConfig = $ARGV[2] || die "You need to specify a classification.config file";
+
+my $sids = get_snort_sids($sidMsgMap, $genMsgMap);
+my $class = get_snort_classifications($classConfig);
 
 my $uffile = undef;
 my $old_uffile = undef;
@@ -126,7 +129,7 @@ sub data_sender {
 	    }
 	}
 	
-	if(!($sock = IO::Socket::SSL->new( PeerAddr => 'localhost',
+	if(!($sock = IO::Socket::SSL->new( PeerAddr => 'rootedyour.com',
 					   PeerPort => '9000',
 					   Proto    => 'tcp',
 					   SSL_use_cert => 1,
