@@ -1,9 +1,9 @@
 #!/usr/bin/perl -I..
 
 ## Threat Intelligence Project client v1.0
-## cummingsj@gmail.com
+## tip@rootedyour.com
 
-# Copyright (C) 2010 JJ Cummings
+# Copyright (C) 2010 The rootedyour.com Team
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
