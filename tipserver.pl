@@ -46,10 +46,10 @@ $sock = IO::Socket::SSL->new( Listen => 5,
 if(!$sock ) {
     warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
     exit(0);
-}else{ warn "socket created: $sock.\n"; }
+}else{ warn "socket created: $sock.\n" if $tdebug; }
 
 while (1) {
-  warn "waiting for next connection.\n";
+  warn "waiting for next connection.\n" if $tdebug;
   
   while(($s = $sock->accept())) {
       my ($peer_cert, $subject_name, $issuer_name, $date, $str);
@@ -59,7 +59,7 @@ while (1) {
 	  next;
       }
       
-      warn "connection opened ($s).\n";
+      warn "connection opened ($s).\n" if $tdebug;
       
       if( ref($sock) eq "IO::Socket::SSL") {
 	  $subject_name = $s->peer_certificate("subject");
