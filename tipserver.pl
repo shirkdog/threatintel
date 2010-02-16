@@ -31,6 +31,7 @@ my ($sock, $s, $v_mode,$data_read,$maxlen,$flags);
 my ($md5sum, $remote_md5);
 my $check=0;
 my @d_read;
+my $tdebug=1;
 
 $sock = IO::Socket::SSL->new( Listen => 5,
 				   LocalAddr => 'localhost',
@@ -65,8 +66,8 @@ while (1) {
 	  $issuer_name = $s->peer_certificate("issuer");
       }
       
-      warn "\t subject: '$subject_name'.\n";
-      warn "\t issuer: '$issuer_name'.\n";
+      #warn "\t subject: '$subject_name'.\n";
+      #warn "\t issuer: '$issuer_name'.\n";
       
       sysread($s,$data_read,2048);
       
@@ -77,6 +78,22 @@ while (1) {
 		$data_read=~s/^\w{32}//;
 		$md5sum = md5_hex( $data_read );
 		@d_read=unpack("s s l l s s s s s l l s s s s",$data_read);
+		warn "****EVENT DATA****\n",
+			"\tsensor_id:@d_read[0]\n",
+			"\tevent_id:@d_read[1]\n",
+			"\ttv_sec:@d_read[2]\n",
+			"\ttv_usec:@d_read[3]\n",
+			"\tsig_id:@d_read[4]\n",
+			"\tsig_gen:@d_read[5]\n",
+			"\tsig_rev:@d_read[6]\n",
+			"\tclass:@d_read[7]\n",
+			"\tpri:@d_read[8]\n",
+			"\tsip:@d_read[9]\n",
+			"\tdip:@d_read[10]\n",
+			"\tsp:@d_read[11]\n",
+			"\tdp:@d_read[12]\n",
+			"\tprotocol:@d_read[13]\n",
+			"\tpkt_action:@d_read[14]\n" if $tdebug;
 	  }elsif ($data_read=~/^PACKET:/) {
 		$data_read=~s/^PACKET://;
 		$data_read=~/^\w{32}/;
@@ -84,21 +101,30 @@ while (1) {
 		$data_read=~s/^\w{32}//;
 		$md5sum = md5_hex( $data_read );
 		@d_read=unpack("s s l l l s s a*",$data_read);
+		warn "****PACKET DATA****\n",
+			"\tsensor_id:@d_read[0]\n",
+			"\tevent_id:@d_read[1]\n",
+			"\ttv_sec:@d_read[2]\n",
+			"\tpkt_sec:@d_read[3]\n",
+			"\tpkt_usec:@d_read[4]\n",
+			"\tlinktype:@d_read[5]\n",
+			"\tpkt_len:@d_read[6]\n",
+			"\tpkt:@d_read[7]\n" if $termdebug;
+			
 	  }
-      warn "\t data read: '@d_read'.\n",
-		"\t remote md5: $remote_md5\n",
-		"\t local md5: $md5sum\n";
+      warn "\t remote md5: $remote_md5\n",
+		"\t local md5: $md5sum\n",
+		"****END DATA****\n" if $tdebug;
   
       $date = localtime();
       if ($md5sum eq $remote_md5) { $check = 1; }
 		syswrite($s,$check,length($check));
       close($s);
-      warn "\t connection closed.\n";
+      warn "connection closed.\n" if $tdebug;
   }
 }
 
 
 $sock->close();
 
-warn "loop exited.\n";
 __END__
