@@ -24,8 +24,6 @@ use warnings;
 use IO::Socket;
 use IO::Socket::SSL;
 use SnortUnified qw(:ALL);
-use SnortUnified::MetaData(qw(:ALL));
-use SnortUnified::TextOutput(qw(:ALL));
 use Sys::Hostname;
 use Digest::MD5(qw(md5_hex));
 
@@ -35,15 +33,9 @@ my $file = shift;
 my $record = undef;
 my $ufdata;
 my @event;
+my $termdebug=1;
 
 unless ($file) { die "You need to define a unified template!\n"; }
-
-my $sidMsgMap = $ARGV[0] || die "You need to specify a sid-msg.map file";
-my $genMsgMap = $ARGV[1] || die "You need to specify a gen-msg.map file";
-my $classConfig = $ARGV[2] || die "You need to specify a classification.config file";
-
-my $sids = get_snort_sids($sidMsgMap, $genMsgMap);
-my $class = get_snort_classifications($classConfig);
 
 my $uffile = undef;
 my $old_uffile = undef;
@@ -68,11 +60,11 @@ sub read_records() {
     
     foreach my $field ( @{$record->{'FIELDS'}} ) {
         if ( $field ne 'pkt' ) {
-            print("$field:" . $record->{$field} . "\n");
+            print("$field:" . $record->{$field} . "\n") if $termdebug;
             push (@event,$record->{$field});
         }elsif ($field eq "pkt") {
 			my $pkt_data = unpack("H*",$record->{'pkt'});
-			print ("$field:$pkt_data\n");
+			print ("$field:$pkt_data\n") if $termdebug;
 			push (@event,$pkt_data);
 		}
     }
@@ -136,7 +128,7 @@ sub data_sender {
 					   SSL_verify_mode => 0x01,
 					   SSL_passwd_cb => sub { return "opossum" },
 					 ))) {
-	    warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
+	    warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n" if $termdebug;
 	    exit(0);
 	} else {
 	    warn "connect ($sock).\n" if ($IO::Socket::SSL::DEBUG);
@@ -150,12 +142,12 @@ sub data_sender {
 	    $cipher = $sock->get_cipher();
 	}
 	warn "cipher: $cipher.\n", "server cert:\n", 
-	    "\t '$subject_name' \n\t '$issuer_name'.\n\n";
+	    "\t '$subject_name' \n\t '$issuer_name'.\n\n" if $termdebug;
 	
 	
 	syswrite($sock,$data_send,length($data_send));
 	sysread($sock,$buf,128);
-	warn "Checksum Ok\n" if $buf eq 1;
+	die "Checksum epic FAIL!\n" unless $buf eq 1;
 	$sock->close();
 }
 
