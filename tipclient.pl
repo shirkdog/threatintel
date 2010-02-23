@@ -23,7 +23,8 @@ use strict;
 use warnings;
 use Net::IP;
 use IO::Socket;
-use IO::Socket::SSL;
+use Socket;
+use IO::Socket::SSL qw();
 use SnortUnified qw(:ALL);
 use Sys::Hostname;
 use Digest::MD5(qw(md5_hex));
@@ -54,8 +55,9 @@ unless ($file) { die "You need to define a unified template!\n"; }
 
 my $uffile = undef;
 my $old_uffile = undef;
+my $client = undef;
 
-my ($v_mode, $sock, $buf, $data_send, $flags, $dbg_pkt, $pkt_data);
+my ($v_mode, $buf, $data_send, $flags, $dbg_pkt, $pkt_data);
 
 $uffile = &get_latest_file($file) || die "no files matching $file - $!\n";
 $ufdata = openSnortUnified($uffile) || die "unable to open $uffile $!\n";
@@ -69,10 +71,11 @@ while (1) {
     $ufdata = openSnortUnified($uffile) || die "cannot open $uffile";
   }
 
-  &read_records();
+  &read_records($client);
 }
 
 sub read_records() {
+	$client=shift;
   while ( $record = readSnortUnifiedRecord() ) {
     
     foreach my $field ( @{$record->{'FIELDS'}} ) {
@@ -92,20 +95,13 @@ sub read_records() {
 			push (@event,$pkt_data);
 		}
     }
-    if ($record->{'sig_id'} && $record->{'protocol'}) {
-		my $p_event = pack("s s l l s s s s s l l s s s s",@event);
-		my $md5sum=md5_hex( $p_event );
-		$p_event="EVENT:$md5sum".$p_event;
-		data_sender($p_event);
-		@event=();
-	}elsif($record->{'pkt_len'}) {
-		my $p_event = pack("s s l l l s s a*",@event);
-		my $md5sum=md5_hex( $p_event );
-		$p_event="PACKET:$md5sum".$p_event;
-		data_sender($p_event);
+    if ($event[22] ne "") {
+		my $p_event = pack("s s l l s s s s s l l s s s s s s l l l s s a*",@event);
+		my $md5sum = md5_hex( $p_event );
+		$p_event = $md5sum.$p_event;
+		data_sender($p_event,$client);
 		@event=();
 	}
-	
   }
 
   print("Exited while. Deadreads is $UF->{'DEADREADS'}.\n") if $debug;
@@ -161,6 +157,43 @@ sub ip_todec {
 	my $DEC = ($octets[0]*1<<24)+($octets[1]*1<<16)+($octets[2]*1<<8)+($octets[3]);
 	return $DEC;
 }
+
+sub server_connect {
+	my $func=shift;
+	# Check to make sure that we were not accidentally run in the wrong
+	# directory:
+	if ($func==0) {
+		unless (-d "certs") {
+		    if (-d "../certs") {
+			chdir "..";
+		    } else {
+			die "Your certs need to be under the certs path right now!!\n";
+		    }
+		}
+		
+		$client = IO::Socket::SSL->new( PeerAddr => 'localhost',
+						   PeerPort => '9000',
+						   Proto    => 'tcp',
+						   SSL_use_cert => 1,
+						   SSL_verify_mode => 0x01,
+						   SSL_passwd_cb => sub { return "opossum" },
+						 ) || warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n" if $termdebug;
+			
+		# check server cert.
+		my ($subject_name, $issuer_name, $cipher);
+		if( ref($client) eq "IO::Socket::SSL") {
+		    $subject_name = $client->peer_certificate("subject");
+		    $issuer_name = $client->peer_certificate("issuer");
+		    $cipher = $client->get_cipher();
+		}
+		warn "cipher: $cipher.\n", "server cert:\n", 
+		    "\t '$subject_name' \n\t '$issuer_name'.\n\n" if $termdebug;
+		
+		return $client;   
+		 
+	}
+	if ($func==1) {$client->close();}	
+}
 	
 sub get_latest_file($) {
   my $filemask = shift;
@@ -180,47 +213,17 @@ sub get_latest_file($) {
 
 # Send the prepared data to the server!
 sub data_sender {
+	$client = server_connect(0);
 	
 	my $data_send = shift;
-	
-	# Check to make sure that we were not accidentally run in the wrong
-	# directory:
-	unless (-d "certs") {
-	    if (-d "../certs") {
-		chdir "..";
-	    } else {
-		die "Your certs need to be under the certs path right now!!\n";
-	    }
+
+	unless ($client->errstr) {
+		syswrite($client,$data_send,length($data_send));
+		sysread($client,$buf,128);
+		print "Checksum Verify: $buf\n" if ($termdebug && $buf eq 1);
+		die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
 	}
-	
-	if(!($sock = IO::Socket::SSL->new( PeerAddr => 'rootedyour.com',
-					   PeerPort => '9000',
-					   Proto    => 'tcp',
-					   SSL_use_cert => 1,
-					   SSL_verify_mode => 0x01,
-					   SSL_passwd_cb => sub { return "opossum" },
-					 ))) {
-	    warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n" if $termdebug;
-	    exit(0);
-	} else {
-	    warn "connect ($sock).\n" if ($IO::Socket::SSL::DEBUG);
-	}
-	
-	# check server cert.
-	my ($subject_name, $issuer_name, $cipher);
-	if( ref($sock) eq "IO::Socket::SSL") {
-	    $subject_name = $sock->peer_certificate("subject");
-	    $issuer_name = $sock->peer_certificate("issuer");
-	    $cipher = $sock->get_cipher();
-	}
-	warn "cipher: $cipher.\n", "server cert:\n", 
-	    "\t '$subject_name' \n\t '$issuer_name'.\n\n" if $termdebug;
-	
-	
-	syswrite($sock,$data_send,length($data_send));
-	sysread($sock,$buf,128);
-	die "Checksum epic FAIL!\n" unless $buf eq 1;
-	$sock->close();
+	server_connect(1);
 }
 
 __END__
