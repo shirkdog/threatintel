@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-## Threat Intelligence Project client v1.0
+## Threat Intelligence Project client v1.0 Dev
 ## tip@rootedyour.com
 
 # Copyright (C) 2010 The rootedyour.com Team
@@ -28,27 +28,34 @@ use SnortUnified qw(:ALL);
 use Sys::Hostname;
 use Digest::MD5(qw(md5_hex));
 
+# Send debug output to stdout
+my $termdebug=1;
 
-my ($v_mode, $sock, $buf, $data_send, $flags, $dbg_pkt, $pkt_data);
+# obf ip address range info, this must be a valid cidr noted block
+# multiple values can be entered separated by , a value of 0 will 
+# disable ip address obfuscation.
+my $obf_cidr="0";
+
+# ofb payloads/pkts, set to 1 and the payload will not be sent upstream
+my $obf_pkts=0;
+
+#####################################################################
+#																	#
+#					DO NOT MODIFY BELOW THIS SECTON					#
+#																	#
+#####################################################################
 
 my $file = shift;
 my $record = undef;
 my $ufdata;
 my @event;
 
-# Send debug output to stdout
-my $termdebug=1;
-
-# obf ip address range info, this must be a valid cidr noted block!
-my $obf_cidr="0";
-
-# ofb payloads/pkts
-my $obf_pkts=0;
-
 unless ($file) { die "You need to define a unified template!\n"; }
 
 my $uffile = undef;
 my $old_uffile = undef;
+
+my ($v_mode, $sock, $buf, $data_send, $flags, $dbg_pkt, $pkt_data);
 
 $uffile = &get_latest_file($file) || die "no files matching $file - $!\n";
 $ufdata = openSnortUnified($uffile) || die "unable to open $uffile $!\n";
@@ -132,16 +139,19 @@ sub print_format_packet($) {
 # Obfuscate specified CIDR block!
 sub obf_cidr {
 	my $target = shift;
-	my $ip = new Net::IP ($obf_cidr);
-	my $new_target = $target;
-	do {
-		my $quad_address = $ip->ip();
-		$quad_address = ip_todec($quad_address);
-		if ($target == $quad_address) { 
-			$new_target = '0';
-		}
-	} while (++$ip);
-	return $new_target;
+	my ($ip,$quad_address);
+	my @obf_cidrs = split(/,/,$obf_cidr);
+	foreach $obf_cidr(@obf_cidrs) {
+		chomp($obf_cidr);
+		$ip = new Net::IP ($obf_cidr);
+		do {
+			$quad_address = ip_todec($ip->ip());
+			if ($target == $quad_address) { 
+				return "0";
+			}
+		} while (++$ip);
+	}
+	return $target;
 }
 
 # Convert quad IP to decimal IP
