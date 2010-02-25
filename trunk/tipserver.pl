@@ -107,7 +107,7 @@ while (1) {
 				"pkt_usec:$d_read[19]\n",
 				"linktype:$d_read[20]\n",
 				"pkt_len:$d_read[21]\n",
-				"pkt:\n".print_format_packet($d_read[22]) if $tdebug;
+				"pkt:\n".print_format_packet(pack("H*",$d_read[22])) if $tdebug;
 			
 			warn "remote md5: $remote_md5\n",
 				"local md5: $md5sum\n",
