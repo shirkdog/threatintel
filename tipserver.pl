@@ -83,35 +83,35 @@ while (1) {
 			$data_read=~s/^\w{32}//;
 			$md5sum = md5_hex( $data_read );
 			@d_read=unpack("s s l l s s s s s l l s s s s s s l l l s s a*",$data_read);
-			warn "****EVENT DATA****\n",
-				"\tsensor_id:$d_read[0]\n",
-				"\tevent_id:$d_read[1]\n",
-				"\ttv_sec:$d_read[2]\n",
-				"\ttv_usec:$d_read[3]\n",
-				"\tsig_id:$d_read[4]\n",
-				"\tsig_gen:$d_read[5]\n",
-				"\tsig_rev:$d_read[6]\n",
-				"\tclass:$d_read[7]\n",
-				"\tpri:$d_read[8]\n",
-				"\tsip:$d_read[9]\n",
-				"\tdip:$d_read[10]\n",
-				"\tsp:$d_read[11]\n",
-				"\tdp:$d_read[12]\n",
-				"\tprotocol:$d_read[13]\n",
-				"\tpkt_action:$d_read[14]\n",
+			warn "\n\n\n****EVENT DATA****\n",
+				"sensor_id:$d_read[0]\n",
+				"event_id:$d_read[1]\n",
+				"tv_sec:$d_read[2]\n",
+				"tv_usec:$d_read[3]\n",
+				"sig_id:$d_read[4]\n",
+				"sig_gen:$d_read[5]\n",
+				"sig_rev:$d_read[6]\n",
+				"class:$d_read[7]\n",
+				"pri:$d_read[8]\n",
+				"sip:$d_read[9]\n",
+				"dip:$d_read[10]\n",
+				"sp:$d_read[11]\n",
+				"dp:$d_read[12]\n",
+				"protocol:$d_read[13]\n",
+				"pkt_action:$d_read[14]\n",
 				"****PACKET DATA****\n",
-				"\tsensor_id:$d_read[15]\n",
-				"\tevent_id:$d_read[16]\n",
-				"\ttv_sec:$d_read[17]\n",
-				"\tpkt_sec:$d_read[18]\n",
-				"\tpkt_usec:$d_read[19]\n",
-				"\tlinktype:$d_read[20]\n",
-				"\tpkt_len:$d_read[21]\n",
-				"\tpkt:$d_read[22]\n" if $tdebug;
+				"sensor_id:$d_read[15]\n",
+				"event_id:$d_read[16]\n",
+				"tv_sec:$d_read[17]\n",
+				"pkt_sec:$d_read[18]\n",
+				"pkt_usec:$d_read[19]\n",
+				"linktype:$d_read[20]\n",
+				"pkt_len:$d_read[21]\n",
+				"pkt:\n".print_format_packet($d_read[22]) if $tdebug;
 			
-			warn "\t remote md5: $remote_md5\n",
-				"\t local md5: $md5sum\n",
-				"****END DATA****\n" if $tdebug;
+			warn "remote md5: $remote_md5\n",
+				"local md5: $md5sum\n",
+				"****END DATA****\n\n\n" if $tdebug;
 			
 			$date = localtime();
 			if ($md5sum eq $remote_md5) { $check = 1; }
@@ -146,6 +146,27 @@ sub start_sock {
 	    exit(0);
 	}else{ warn "socket created: $sock.\n" if $tdebug; }
 	return $sock;
+}
+
+# Make packet debug output pretty!
+sub print_format_packet($) {
+    my $data = $_[0];
+    my $buff = '';
+    my $hex = '';
+    my $ascii = '';
+    my $len = length($data);
+    my $count = 0;
+    my $ret = "";
+
+    for (my $i = 0;$i < length($data);$i += 16) {
+       $buff = substr($data,$i,16);
+       $hex = join(' ',unpack('H2 H2 H2 H2 H2 H2 H2 H2 H2 H2 H2 H2 H2 H2 H2 H2',$buff));
+       $ascii = unpack('a16', $buff);
+       $ascii =~ tr/A-Za-z0-9;:\"\'.,<>[]\\|?\/\`~!\@#$%^&*()_\-+={}/./c;
+       $ret = $ret . sprintf("%.4X: %-50s%s\n", $count, $hex, $ascii);
+       $count += length($buff);
+    }
+  return $ret;
 }
 
 sub insert_event {
