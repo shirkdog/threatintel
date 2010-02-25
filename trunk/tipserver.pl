@@ -66,7 +66,7 @@ while (1) {
 			}
 			my ($client_port,$client_address) = sockaddr_in($s->peername);
 			$client_address = inet_ntoa($client_address);
-			warn "connection opened ($s). from $client_address\n" if $tdebug;
+			warn "connection opened ($s) from $client_address\n" if $tdebug;
 			
 			if( ref($sock) eq "IO::Socket::SSL") {
 				$subject_name = $s->peer_certificate("subject");
