@@ -27,21 +27,28 @@ use DBI;
 use Digest::MD5(qw(md5_hex));
 use POSIX qw(:sys_wait_h);
 
+
+# Send debug output to stdout
+my $tdebug=1;
+
+# Set our database connection information (mysql only)
+my $dbname = 'snort';
+my $dbhost = 'localhost';
+my $dbuname = 'snorty';
+my $dbpass = 'secret';
+
+# Build or database connection to mysql, enable auto reconnect if the 
+# server goes away and throw a warn
+my $dbh = DBI->connect("DBI:mysql:database=$dbname;host=$dbhost",
+						"$dbuname","$dbpass",
+						{PrintError=>1, mysql_auto_reconnect => 1}) or warn DBI->errstr;
+
 if($ARGV[0] && $ARGV[0] eq "DEBUG") { $IO::Socket::SSL::DEBUG = 1; } 
 
 my ($sock, $s, $v_mode,$data_read,$maxlen,$flags);
 my ($md5sum, $remote_md5);
 my $check=0;
 my @d_read;
-
-# Send debug output to stdout
-my $tdebug=1;
-
-# Build or database connection to mysql, enable auto reconnect if the 
-# server goes away and throw a warn
-#my $dbh = DBI->connect("DBI:mysql:database=$dbname;host=$dbhost",
-#						"$dbuname","$dbpass",
-#						{PrintError=>1, mysql_auto_reconnect => 1}) or warn DBI->errstr;
 
 start_sock();
 $SIG{CHLD}= \&REAPER;
@@ -57,8 +64,9 @@ while (1) {
 				warn "error: ", $sock->errstr, "\n";
 				next;
 			}
-			#my $client_address = gethostbyaddr($s->peeraddr);
-			warn "connection opened ($s).\n" if $tdebug;
+			my $client_address = gethostbyaddr($s->peeraddr,AF_INET);
+			$client_address = inet_ntoa(inet_aton($client_address));
+			warn "connection opened ($s). from $client_address\n" if $tdebug;
 			
 			if( ref($sock) eq "IO::Socket::SSL") {
 				$subject_name = $s->peer_certificate("subject");
