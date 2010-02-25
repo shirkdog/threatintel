@@ -64,9 +64,8 @@ while (1) {
 				warn "error: ", $sock->errstr, "\n";
 				next;
 			}
-			my $client_address = gethostbyaddr($s->peeraddr,AF_INET);
-			if ($client_address) {$client_address = inet_ntoa(inet_aton($client_address));}
-			else {$client_address = "UNKNOWN";}
+			my ($client_port,$client_address) = sockaddr_in($s->peername);
+			$client_address = inet_ntoa($client_address);
 			warn "connection opened ($s). from $client_address\n" if $tdebug;
 			
 			if( ref($sock) eq "IO::Socket::SSL") {
