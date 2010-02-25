@@ -65,7 +65,7 @@ while (1) {
 				next;
 			}
 			my $client_address = gethostbyaddr($s->peeraddr,AF_INET);
-			if $client_address {$client_address = inet_ntoa(inet_aton($client_address));}
+			if ($client_address) {$client_address = inet_ntoa(inet_aton($client_address));}
 			else $client_address = "UNKNOWN";
 			warn "connection opened ($s). from $client_address\n" if $tdebug;
 			
