@@ -28,25 +28,27 @@ use IO::Socket::SSL qw();
 use SnortUnified qw(:ALL);
 use Sys::Hostname;
 use Digest::MD5(qw(md5_hex));
+use Getopt::Long qw(:config no_ignore_case bundling);
 
-# Send debug output to stdout
-my $termdebug=1;
-
-# obf ip address range info, this must be a valid cidr noted block
-# multiple values can be entered separated by , a value of 0 will 
-# disable ip address obfuscation.
+my ($termdebug,$file);
 my $obf_cidr="0";
-
-# ofb payloads/pkts, set to 1 and the payload will not be sent upstream
 my $obf_pkts=0;
 
-#####################################################################
-#																	#
-#					DO NOT MODIFY BELOW THIS SECTON					#
-#																	#
-#####################################################################
+tipper();
 
-my $file = shift;
+#read options at runtime
+GetOptions ( "t=s" => \$file,
+						"C=s" => \$obf_cidr,
+                        "P!" => \$obf_pkts,
+                        "v!" => \$termdebug,
+                        "help|?" => sub { help() });
+print "\n\nFlag Debug Information:\n" if $termdebug;                        
+print "\tTemplat file is: $file\n" if $file && $termdebug;
+print "\tCIDR Blocks to be OBFuscated $obf_cidr\n" if $obf_cidr && $termdebug;
+print "\tObfuscate Payload Flag is Set\n" if $obf_pkts && $termdebug;
+print "\tVerbose Flag is Set\n" if $termdebug;
+sleep(5) if $termdebug;
+
 my $record = undef;
 my $ufdata;
 my @event;
@@ -74,6 +76,33 @@ while (1) {
   &read_records($client);
 }
 
+sub help {
+	
+print<<__EOT;
+	
+Usage ./tipclient.pl -t <unified2 template name> -C <cidr to obfuscate> -Pv
+	
+-t <unified2 template name> (the base path and template name of your unified2 files) 
+-C <cidr block> specify what <cidr block> to obfuscate, you can speficy
+   multiple entries, they must be comma separated and not contain a space
+-P Obfuscate the payload
+-v run in verbose (debug) mode.
+__EOT
+exit(0);
+}
+
+sub tipper {
+
+print<<__EOT;
+
+
+## Threat Intelligence Project client v1.0 Dev ##
+   Copyright (C) 2010 The rootedyour.com Team
+	     http://www.rootedyour.com/tip
+	          tip\@rootedyour.com
+__EOT
+}
+
 sub read_records() {
 	$client=shift;
   while ( $record = readSnortUnifiedRecord() ) {
@@ -95,7 +124,7 @@ sub read_records() {
 			push (@event,$pkt_data);
 		}
     }
-    if ($event[22] ne "") {
+    if ($event[22] && $event[22] ne "") {
 		my $p_event = pack("s s l l s s s s s l l s s s s s s l l l s s a*",@event);
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
@@ -171,13 +200,13 @@ sub server_connect {
 		    }
 		}
 		
-		$client = IO::Socket::SSL->new( PeerAddr => 'localhost',
+		$client = IO::Socket::SSL->new( PeerAddr => 'rootedyour.com',
 						   PeerPort => '9000',
 						   Proto    => 'tcp',
 						   SSL_use_cert => 1,
 						   SSL_verify_mode => 0x01,
 						   SSL_passwd_cb => sub { return "opossum" },
-						 ) || warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n" if $termdebug;
+						 ) || warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
 			
 		# check server cert.
 		my ($subject_name, $issuer_name, $cipher);
@@ -187,7 +216,7 @@ sub server_connect {
 		    $cipher = $client->get_cipher();
 		}
 		warn "cipher: $cipher.\n", "server cert:\n", 
-		    "\t '$subject_name' \n\t '$issuer_name'.\n\n" if $termdebug;
+		    "\t '$subject_name' \n\t '$issuer_name'.\n\n" if $termdebug && $cipher;
 		
 		return $client;   
 		 
