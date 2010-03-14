@@ -30,30 +30,35 @@ use Sys::Hostname;
 use Digest::MD5(qw(md5_hex));
 use Getopt::Long qw(:config no_ignore_case bundling);
 
-my ($termdebug,$file);
+my ($termdebug,$file,%config);
 my $obf_cidr="0";
 my $obf_pkts=0;
+my $configfile=0;
+my $localtest=0;
 
 tipper();
 
 #read options at runtime
 GetOptions ( "t=s" => \$file,
-						"C=s" => \$obf_cidr,
+			"C=s" => \$obf_cidr,
                         "P!" => \$obf_pkts,
+                        "c=s" => \$configfile,
                         "v!" => \$termdebug,
+                        "T!" => \$localtest,
                         "help|?" => sub { help() });
 print "\n\nFlag Debug Information:\n" if $termdebug;                        
 print "\tTemplat file is: $file\n" if $file && $termdebug;
 print "\tCIDR Blocks to be OBFuscated $obf_cidr\n" if $obf_cidr && $termdebug;
 print "\tObfuscate Payload Flag is Set\n" if $obf_pkts && $termdebug;
 print "\tVerbose Flag is Set\n" if $termdebug;
-sleep(5) if $termdebug;
+print "\tLocal test only - No server connection is set\n" if $localtest && $termdebug;
+print "\tConfig files is $configfile\n" if $termdebug;
+print "\tSleeping.....\n" if $termdebug;
 
 my $record = undef;
 my $ufdata;
 my @event;
 
-unless ($file) { die "You need to define a unified template!\n"; }
 
 my $uffile = undef;
 my $old_uffile = undef;
@@ -61,7 +66,58 @@ my $client = undef;
 
 my ($v_mode, $buf, $data_send, $flags, $dbg_pkt, $pkt_data);
 
+# Set some defaults for the config (based on current hardcoded values).
+$config{'server'}='rootedyour.com';
+$config{'port'}='9000';
+$config{'template'}='./snort.log';
+$config{'tip_network'}="tip_network";
+$config{'tip_user'}="tip_user";
+$config{'obf_cidr'}=0;
+
+# Read a config file
+if ( $configfile ) {
+	open my $config, '<', $configfile or die "Unable to open config file $configfile $!";
+    	while(<$config>) {
+        	chomp; 
+        	if ( $_ =~ m/^[a-zA-Z]/) {
+                	(my $key, my @value) = split /=/, $_;
+                	$config{$key} = join '=', @value;
+        	}    
+    	}    
+	close $config;
+}
+
+if ($termdebug) {
+	print "
+\t- Config file: TIP Server		$config{'server'}
+\t- Config file: TIP Port		$config{'port'}
+\t- Config file: Unified Template	$config{'template'}  
+\t- Config file: TIP User		$config{'tip_user'}
+\t- Config file: TIP network		$config{'tip_network'}
+\t- Config file: Obfuscated networks	$config{'obf_cidr'}
+";
+	if ($file) {
+		print "* template set on command line - $file trumps $config{'template'} \n";
+	}
+	if ($obf_cidr) {
+		print "* Obf_cidr set on command line - $obf_cidr trumps $config{'obf_cidr'}\n";
+	}
+}
+
+
+
+unless ($file) { 
+	$file=$config{'template'};
+}
+unless ($obf_cidr) {
+	$obf_cidr=$config{'obf_cidr'};
+}
+
+sleep(5) if $termdebug;
+
 $uffile = &get_latest_file($file) || die "no files matching $file - $!\n";
+
+print "about to open $uffile \n";
 $ufdata = openSnortUnified($uffile) || die "unable to open $uffile $!\n";
 
 while (1) {
@@ -83,10 +139,12 @@ print<<__EOT;
 Usage ./tipclient.pl -t <unified2 template name> -C <cidr to obfuscate> -Pv
 	
 -t <unified2 template name> (the base path and template name of your unified2 files) 
+-c <config file> 	Filename of a config file 
 -C <cidr block> specify what <cidr block> to obfuscate, you can speficy
    multiple entries, they must be comma separated and not contain a space
 -P Obfuscate the payload
 -v run in verbose (debug) mode.
+-T run in local-test mode. Does not connect to a server. Added for debugging and development.
 __EOT
 exit(0);
 }
@@ -162,6 +220,7 @@ sub print_format_packet($) {
 }
 
 # Obfuscate specified CIDR block!
+# This function is crazy slow and needs some love. JJ There must be a better way to do this.
 sub obf_cidr {
 	my $target = shift;
 	my ($ip,$quad_address);
@@ -172,6 +231,11 @@ sub obf_cidr {
 		do {
 			$quad_address = ip_todec($ip->ip());
 			if ($target == $quad_address) { 
+				my $obf_seed=$config{'tip_user'} . $config{'tip_network'} . $target;
+				print "Obfuscated to " . md5_hex($obf_seed) . "\n";
+				# Data type decision here required. Do we want to keep ip address' as an int?
+				# This will cause problems with obf, and in future maybe hostnames would be good
+				#return md5_hex($obf_seed);
 				return "0";
 			}
 		} while (++$ip);
@@ -200,8 +264,8 @@ sub server_connect {
 		    }
 		}
 		
-		$client = IO::Socket::SSL->new( PeerAddr => 'rootedyour.com',
-						   PeerPort => '9000',
+		$client = IO::Socket::SSL->new( PeerAddr => "$config{'server'}",
+						   PeerPort => "$config{'port'}",
 						   Proto    => 'tcp',
 						   SSL_use_cert => 1,
 						   SSL_verify_mode => 0x01,
@@ -242,17 +306,18 @@ sub get_latest_file($) {
 
 # Send the prepared data to the server!
 sub data_sender {
-	$client = server_connect(0);
-	
-	my $data_send = shift;
+	unless ($localtest) {
+		$client = server_connect(0);
+		my $data_send = shift;
 
-	unless ($client->errstr) {
-		syswrite($client,$data_send,length($data_send));
-		sysread($client,$buf,128);
-		print "Checksum Verify: $buf\n" if ($termdebug && $buf eq 1);
-		die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
+		unless ($client->errstr) {
+			syswrite($client,$data_send,length($data_send));
+			sysread($client,$buf,128);
+			print "Checksum Verify: $buf\n" if ($termdebug && $buf eq 1);
+			die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
+		}
+		server_connect(1);
 	}
-	server_connect(1);
 }
 
 __END__
