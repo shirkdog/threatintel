@@ -220,7 +220,6 @@ sub print_format_packet($) {
 }
 
 # Obfuscate specified CIDR block!
-# This function is crazy slow and needs some love. JJ There must be a better way to do this.
 sub obf_cidr {
 	my $target = shift;
 	my ($ip,$quad_address);
@@ -228,17 +227,20 @@ sub obf_cidr {
 	foreach $obf_cidr(@obf_cidrs) {
 		chomp($obf_cidr);
 		$ip = new Net::IP ($obf_cidr);
-		do {
-			$quad_address = ip_todec($ip->ip());
-			if ($target == $quad_address) { 
-				my $obf_seed=$config{'tip_user'} . $config{'tip_network'} . $target;
-				print "Obfuscated to " . md5_hex($obf_seed) . "\n";
-				# Data type decision here required. Do we want to keep ip address' as an int?
-				# This will cause problems with obf, and in future maybe hostnames would be good
-				#return md5_hex($obf_seed);
-				return "0";
-			}
-		} while (++$ip);
+		# The old method used to check if an IP was in a CIDR was taking way too long (I gave up after a couple of minutes of waiting).
+		# This method looks for the high and low values and checks if the target is within range.
+		my $first_ip=$ip->ip();
+		my @octets = split(/\./, $first_ip);
+		my $long_first_ip = ($octets[0]*1<<24)+($octets[1]*1<<16)+($octets[2]*1<<8)+($octets[3]);
+		my $long_last_ip=$ip->last_int();	
+		if ( ($target le $long_last_ip) && ($target ge $long_first_ip) ) {
+			# Data type decision here required. Do we want to keep ip address' as a decimal?
+			# This will create limitations with obf, and in future maybe hostnames would be needed
+			# Not making this change until someone else says go.
+			# my $obf_seed=$config{'tip_user'} . $config{'tip_network'} . $target;
+			# return md5_hex($obf_seed);
+			return "0";
+		}
 	}
 	return $target;
 }
