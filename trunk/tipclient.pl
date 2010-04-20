@@ -67,9 +67,9 @@ my $client = undef;
 my ($v_mode, $buf, $data_send, $flags, $dbg_pkt, $pkt_data);
 
 # Set some defaults for the config (based on current hardcoded values).
-$config{'server'}='rootedyour.com';
+$config{'server'}='localhost';
 $config{'port'}='9000';
-$config{'template'}='./snort.log';
+$config{'template'}='../alerts/snortunified2.log';
 $config{'tip_network'}="tip_network";
 $config{'tip_user'}="tip_user";
 $config{'obf_cidr'}=0;
