@@ -29,6 +29,7 @@ use SnortUnified qw(:ALL);
 use Sys::Hostname;
 use Digest::MD5(qw(md5_hex));
 use Getopt::Long qw(:config no_ignore_case bundling);
+use Carp;
 
 my ($termdebug,$file,%config);
 my $obf_cidr="0";
@@ -103,8 +104,6 @@ if ($termdebug) {
 		print "* Obf_cidr set on command line - $obf_cidr trumps $config{'obf_cidr'}\n";
 	}
 }
-
-
 
 unless ($file) { 
 	$file=$config{'template'};
@@ -183,11 +182,11 @@ sub read_records() {
 		}
     }
     if ($event[22] && $event[22] ne "") {
-		my $p_event = pack("s s l l s s s s s l l s s s s s s l l l s s a*",@event);
+		my $p_event = pack("I I L L L I I I I L L I I s s s s L L L s s a*",@event);
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
 		data_sender($p_event,$client);
-		@event=();
+		undef @event;
 	}
   }
 
@@ -272,7 +271,7 @@ sub server_connect {
 						   SSL_use_cert => 1,
 						   SSL_verify_mode => 0x01,
 						   SSL_passwd_cb => sub { return "opossum" },
-						 ) || warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
+						 ) || carp "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
 			
 		# check server cert.
 		my ($subject_name, $issuer_name, $cipher);
@@ -281,7 +280,7 @@ sub server_connect {
 		    $issuer_name = $client->peer_certificate("issuer");
 		    $cipher = $client->get_cipher();
 		}
-		warn "cipher: $cipher.\n", "server cert:\n", 
+		print "cipher: $cipher.\n", "server cert:\n", 
 		    "\t '$subject_name' \n\t '$issuer_name'.\n\n" if $termdebug && $cipher;
 		
 		return $client;   
@@ -319,6 +318,7 @@ sub data_sender {
 			die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
 		}
 		server_connect(1);
+		undef $client;
 	}
 }
 
