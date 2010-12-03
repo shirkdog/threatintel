@@ -26,6 +26,7 @@ use IO::Socket::SSL;
 use DBI;
 use Digest::MD5(qw(md5_hex));
 use POSIX qw(:sys_wait_h);
+use Carp;
 
 
 # Send debug output to stdout
@@ -41,7 +42,7 @@ my $dbpass = 'secret';
 # server goes away and throw a warn
 my $dbh = DBI->connect("DBI:mysql:database=$dbname;host=$dbhost",
 						"$dbuname","$dbpass",
-						{PrintError=>1, mysql_auto_reconnect => 1}) or warn DBI->errstr;
+						{PrintError=>1, mysql_auto_reconnect => 1}) or carp DBI->errstr;
 
 if($ARGV[0] && $ARGV[0] eq "DEBUG") { $IO::Socket::SSL::DEBUG = 1; } 
 
@@ -53,7 +54,7 @@ my @d_read;
 start_sock();
 $SIG{CHLD}= \&REAPER;
 while (1) {
-	warn "waiting for next connection.\n" if $tdebug;
+	carp "waiting for next connection.\n" if $tdebug;
 	while(($s = $sock->accept())) {
 		my $pid = fork;
 		die "fork: $!" unless defined $pid;
@@ -61,12 +62,12 @@ while (1) {
 		if ($pid == 0) {
 			my ($peer_cert, $subject_name, $issuer_name, $date, $str);
 			if( ! $s ) {
-				warn "error: ", $sock->errstr, "\n";
+				carp "error: ", $sock->errstr, "\n";
 				next;
 			}
 			my ($client_port,$client_address) = sockaddr_in($s->peername);
 			$client_address = inet_ntoa($client_address);
-			warn "connection opened ($s) from $client_address\n" if $tdebug;
+			carp "connection opened ($s) from $client_address\n" if $tdebug;
 			
 			if( ref($sock) eq "IO::Socket::SSL") {
 				$subject_name = $s->peer_certificate("subject");
@@ -82,8 +83,8 @@ while (1) {
 			$remote_md5=$&;
 			$data_read=~s/^\w{32}//;
 			$md5sum = md5_hex( $data_read );
-			@d_read=unpack("s s l l s s s s s l l s s s s s s l l l s s a*",$data_read);
-			warn "\n\n\n****EVENT DATA****\n",
+			@d_read=unpack("I I L L L I I I I L L I I s s s s L L L s s a**",$data_read);
+			print "\n\n\n****EVENT DATA****\n",
 				"sensor_id:$d_read[0]\n",
 				"event_id:$d_read[1]\n",
 				"tv_sec:$d_read[2]\n",
@@ -109,7 +110,7 @@ while (1) {
 				"pkt_len:$d_read[21]\n",
 				"pkt:\n".print_format_packet(pack("H*",$d_read[22])) if $tdebug;
 			
-			warn "remote md5: $remote_md5\n",
+			print "remote md5: $remote_md5\n",
 				"local md5: $md5sum\n",
 				"****END DATA****\n\n\n" if $tdebug;
 			
@@ -117,8 +118,9 @@ while (1) {
 			if ($md5sum eq $remote_md5) { $check = 1; }
 			syswrite($s,$check,length($check));
 			close($s);
-			warn "connection closed.\n" if $tdebug;
-			exit
+			undef $s;
+			print "connection closed.\n" if $tdebug;
+			exit(0);
 		}
 	}
 }
@@ -142,9 +144,9 @@ sub start_sock {
 					 );
 					 
 	if(!$sock ) {
-	    warn "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
+	    carp "unable to create socket: ", &IO::Socket::SSL::errstr, "\n";
 	    exit(0);
-	}else{ warn "socket created: $sock.\n" if $tdebug; }
+	}else{ print "socket created: $sock.\n" if $tdebug; }
 	return $sock;
 }
 
