@@ -96,6 +96,8 @@ if ($termdebug) {
 \t- Config file: TIP User		$config{'tip_user'}
 \t- Config file: TIP network		$config{'tip_network'}
 \t- Config file: Obfuscated networks	$config{'obf_cidr'}
+\t- Config File: Sensor Name	$config{'tip_sensor'}
+\t- Config File: Sensor Intf 	$config{'sensor_int'}
 ";
 	if ($file) {
 		print "* template set on command line - $file trumps $config{'template'} \n";
@@ -163,7 +165,8 @@ __EOT
 sub read_records() {
 	$client=shift;
   while ( $record = readSnortUnifiedRecord() ) {
-    
+    $event[0]=$config{'tip_sensor'};
+    $event[1]=$config{'sensor_intf'};
     foreach my $field ( @{$record->{'FIELDS'}} ) {
         if ( $field ne 'pkt' ) {
             print("$field:" . $record->{$field} . "\n") if ($termdebug && $field ne "sip" && $field ne "dip");
@@ -181,8 +184,8 @@ sub read_records() {
 			push (@event,$pkt_data);
 		}
     }
-    if ($event[22] && $event[22] ne "") {
-		my $p_event = pack("I I L L L I I I I L L I I s s s s L L L s s a*",@event);
+    if ($event[24] && $event[24] ne "") {
+		my $p_event = pack("Z Z I I L L L I I I I L L I I s s s s L L L s s a*",@event);
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
 		data_sender($p_event,$client);
