@@ -165,13 +165,12 @@ __EOT
 sub read_records() {
 	$client=shift;
   while ( $record = readSnortUnifiedRecord() ) {
-	undef @event;  
 	my $counter = 1;
-    push (@event,($config{'tip_sensor'});
-    push (@event,$config{'sensor_intf'});
+    $event[0]=$config{'tip_sensor'};
+    $event[1]=$config{'sensor_intf'};
     print "0 sensor:$event[0]\n1 interface:$event[1]\n";
     foreach my $field ( @{$record->{'FIELDS'}} ) {
-		$counter++
+		$counter++;
         if ( $field ne 'pkt' ) {
             print("$counter $field:" . $record->{$field} . "\n") if ($termdebug && $field ne "sip" && $field ne "dip");
             if ($obf_cidr ne "0" && $field eq "sip") { $record->{$field} = obf_cidr($record->{$field}); } 
