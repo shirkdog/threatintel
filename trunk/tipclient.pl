@@ -164,9 +164,9 @@ __EOT
 
 sub read_records() {
 	$client=shift;
-  while ( $record = readSnortUnifiedRecord() ) {
 	my $counter = 1;
-    $event[0]=$config{'tip_sensor'};
+  while ( $record = readSnortUnifiedRecord() ) {
+	$event[0]=$config{'tip_sensor'};
     $event[1]=$config{'sensor_intf'};
     print "0 sensor:$event[0]\n1 interface:$event[1]\n";
     foreach my $field ( @{$record->{'FIELDS'}} ) {
@@ -193,6 +193,7 @@ sub read_records() {
 		$p_event = $md5sum.$p_event;
 		data_sender($p_event,$client);
 		undef @event;
+		$counter=1;
 	}
   }
 
