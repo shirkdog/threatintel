@@ -97,7 +97,7 @@ if ($termdebug) {
 \t- Config file: TIP network		$config{'tip_network'}
 \t- Config file: Obfuscated networks	$config{'obf_cidr'}
 \t- Config File: Sensor Name	$config{'tip_sensor'}
-\t- Config File: Sensor Intf 	$config{'sensor_int'}
+\t- Config File: Sensor Intf 	$config{'sensor_intf'}
 ";
 	if ($file) {
 		print "* template set on command line - $file trumps $config{'template'} \n";
@@ -165,27 +165,31 @@ __EOT
 sub read_records() {
 	$client=shift;
   while ( $record = readSnortUnifiedRecord() ) {
-    $event[0]=$config{'tip_sensor'};
-    $event[1]=$config{'sensor_intf'};
+	undef @event;  
+	my $counter = 1;
+    push (@event,($config{'tip_sensor'});
+    push (@event,$config{'sensor_intf'});
+    print "0 sensor:$event[0]\n1 interface:$event[1]\n";
     foreach my $field ( @{$record->{'FIELDS'}} ) {
+		$counter++
         if ( $field ne 'pkt' ) {
-            print("$field:" . $record->{$field} . "\n") if ($termdebug && $field ne "sip" && $field ne "dip");
+            print("$counter $field:" . $record->{$field} . "\n") if ($termdebug && $field ne "sip" && $field ne "dip");
             if ($obf_cidr ne "0" && $field eq "sip") { $record->{$field} = obf_cidr($record->{$field}); } 
-            print("$field:" . inet_ntoa(pack('N', $record->{$field})) . "\n") if ($termdebug && $field eq "sip");
+            print("$counter $field:" . inet_ntoa(pack('N', $record->{$field})) . "\n") if ($termdebug && $field eq "sip");
             if ($obf_cidr ne "0" && $field eq "dip") { $record->{$field} = obf_cidr($record->{$field}); } 
-            print("$field:" . inet_ntoa(pack('N', $record->{$field})) . "\n") if ($termdebug && $field eq "dip");
+            print("$counter $field:" . inet_ntoa(pack('N', $record->{$field})) . "\n") if ($termdebug && $field eq "dip");
             push (@event,$record->{$field});
         }elsif ($field eq "pkt") {
 			$pkt_data=unpack("H*",$record->{'pkt'}) unless $obf_pkts;
 			$pkt_data="5041434b45542044415441204f4d4954544544" if $obf_pkts;
 			$dbg_pkt=print_format_packet($record->{'pkt'}) unless $obf_pkts;
 			$dbg_pkt="PACKET DATA OMITTED" if $obf_pkts;
-			print ("$field:\n$dbg_pkt\n") if $termdebug;
+			print ("$counter $field:\n$dbg_pkt\n") if $termdebug;
 			push (@event,$pkt_data);
 		}
     }
     if ($event[24] && $event[24] ne "") {
-		my $p_event = pack("Z Z I I L L L I I I I L L I I s s s s L L L s s a*",@event);
+		my $p_event = pack("a32 a32 I I L L L I I I I L L I I s s s s L L L s s a*",@event);
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
 		data_sender($p_event,$client);

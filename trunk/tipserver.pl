@@ -83,7 +83,7 @@ while (1) {
 			$remote_md5=$&;
 			$data_read=~s/^\w{32}//;
 			$md5sum = md5_hex( $data_read );
-			@d_read=unpack("I I L L L I I I I L L I I s s s s L L L s s a*",$data_read);
+			@d_read=unpack("a32 a32 I I L L L I I I I L L I I s s s s L L L s s a*",$data_read);
 			print "\n\n\n****EVENT DATA****\n",
 			    "sensor_name:$d_read[0]\n",
 			    "sensor_interface:$d_read[1]\n",
@@ -135,7 +135,7 @@ while (1) {
 				$sth->execute();
 				$sensorid = $sth->fetchrow_array();
 			}
-			my $sid = getcid($sensorid);
+			my $cid = getcid($sensorid);
 			
 			my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = gmtime($d_read[20]);
 			$year=$year+1900;
@@ -170,7 +170,7 @@ while (1) {
 			
 			# Unsupported packet type by snort schema 107
 			else {
-				print "\n\n!!!!!!!!!!!!UNSUPPORTED PACKET TYPE: $d_read[15]\n\n" if $termdebug;
+				print "\n\n!!!!!!!!!!!!UNSUPPORTED PACKET TYPE: $d_read[15]\n\n" if $tdebug;
 			}		
 			
 			my $pkthex=unpack("H*", $d_read[24]);
@@ -212,14 +212,15 @@ sub start_sock {
 sub getcid {
 	my $sensorid = shift;
 	my $sth = $dbh->prepare("SELECT MAX(cid) from event where sid = $sensorid");
+	my $cid;
 	$sth->execute();
 	if ($sth) {
 		$cid = $sth->fetchrow_array();
 		$cid++;
 	}else{
-		$cid = $feed{'event_id'};
+		$cid = 1;
 	}
-	print "\ncid: $cid" if $termdebug;
+	print "\ncid: $cid" if $tdebug;
 	return $cid;
 }
 
