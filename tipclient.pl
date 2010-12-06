@@ -316,9 +316,8 @@ sub get_latest_file($) {
 
 # Send the prepared data to the server!
 sub data_sender {
-	my $client = shift;
 	unless ($localtest) {
-		my $data_send = shift;
+		my ($data_send,$client) = @_;
 
 		unless ($client->errstr) {
 			syswrite($client,$data_send,length($data_send));

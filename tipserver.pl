@@ -49,10 +49,10 @@ if($ARGV[0] && $ARGV[0] eq "DEBUG") { $IO::Socket::SSL::DEBUG = 1; }
 my ($sock, $s, $v_mode,$data_read,$maxlen,$flags);
 my ($md5sum, $remote_md5);
 my $check=0;
-my @d_read;
+my @d_read=undef;
 
 start_sock();
-$SIG{CHLD}= \&REAPER;
+#$SIG{CHLD}= \&REAPER;
 while (1) {
 	carp "waiting for next connection.\n" if $tdebug;
 	while(($s = $sock->accept())) {
@@ -120,8 +120,8 @@ while (1) {
 			$date = localtime();
 			if ($md5sum eq $remote_md5) { $check = 1; }
 			syswrite($s,$check,length($check));
-			close($s);
-			undef $s;
+			#close($s);
+			#undef $s;
 			print "connection closed.\n" if $tdebug;
 			print "Writing mysql Data\n" if $tdebug;
 					
