@@ -191,6 +191,7 @@ sub read_records() {
 		my $p_event = pack("a32 a32 I I L L L I I I I L L I I s s s s L L L s s a*",@event);
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
+		print "** Sending Data **\n" if $debug;
 		data_sender($p_event,$client);
 		undef @event;
 		$counter=1;
