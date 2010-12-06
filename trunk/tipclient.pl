@@ -121,6 +121,7 @@ $uffile = &get_latest_file($file) || die "no files matching $file - $!\n";
 print "about to open $uffile \n";
 $ufdata = openSnortUnified($uffile) || die "unable to open $uffile $!\n";
 
+$client = server_connect(0);
 while (1) {
   $old_uffile = $uffile;
   $uffile = &get_latest_file($file) || die "no files to get";
@@ -165,6 +166,7 @@ __EOT
 sub read_records() {
 	$client=shift;
 	my $counter = 1;
+	
   while ( $record = readSnortUnifiedRecord() ) {
 	$event[0]=$config{'tip_sensor'};
     $event[1]=$config{'sensor_int'};
@@ -192,10 +194,10 @@ sub read_records() {
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
 		print "** Sending Data **\n" if $debug;
-		$client = server_connect(0);
+		#$client = server_connect(0);
 		data_sender($p_event,$client);
-		server_connect(1);
-		undef $client;
+		#server_connect(1);
+		#undef $client;
 		undef @event;
 		$counter=1;
 	}

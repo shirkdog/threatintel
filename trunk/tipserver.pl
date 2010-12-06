@@ -37,7 +37,7 @@ my $testing=1;
 my $dbname = 'snort';
 my $dbhost = 'localhost';
 my $dbuname = 'root';
-my $dbpass = 'phreezray';
+my $dbpass = 'phoozilla';
 
 # Build or database connection to mysql, enable auto reconnect if the 
 # server goes away and throw a warn
@@ -56,8 +56,8 @@ start_sock();
 while (1) {
 	carp "waiting for next connection.\n" if $tdebug;
 	
-	$s->close() if $s;
-	undef $s if $s;
+	#$s->close() if $s;
+	#undef $s if $s;
 	$s = $sock->accept() unless $s;
 
 	my ($peer_cert, $subject_name, $issuer_name, $date, $str);
@@ -75,7 +75,7 @@ while (1) {
 	}
 	
 	sysread($s,$data_read,2048);
-	print $data_read;
+
 	$data_read=~/^\w{32}/;
 	$remote_md5=$&;
 	$data_read=~s/^\w{32}//;
