@@ -325,6 +325,7 @@ sub data_sender {
 			print "Checksum Verify: $buf\n" if ($termdebug && $buf eq 1);
 			die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
 		}
+		croak ($client->errstr ."$!") if ($client->errstr);
 		server_connect(1);
 		undef $client;
 	}
