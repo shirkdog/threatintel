@@ -97,7 +97,7 @@ if ($termdebug) {
 \t- Config file: TIP network		$config{'tip_network'}
 \t- Config file: Obfuscated networks	$config{'obf_cidr'}
 \t- Config File: Sensor Name	$config{'tip_sensor'}
-\t- Config File: Sensor Intf 	$config{'sensor_intf'}
+\t- Config File: Sensor Intf 	$config{'sensor_int'}
 ";
 	if ($file) {
 		print "* template set on command line - $file trumps $config{'template'} \n";
@@ -167,7 +167,7 @@ sub read_records() {
 	my $counter = 1;
   while ( $record = readSnortUnifiedRecord() ) {
 	$event[0]=$config{'tip_sensor'};
-    $event[1]=$config{'sensor_intf'};
+    $event[1]=$config{'sensor_int'};
     print "0 sensor:$event[0]\n1 interface:$event[1]\n";
     foreach my $field ( @{$record->{'FIELDS'}} ) {
 		$counter++;
