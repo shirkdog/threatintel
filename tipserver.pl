@@ -120,6 +120,8 @@ while (1) {
 			$date = localtime();
 			if ($md5sum eq $remote_md5) { $check = 1; }
 			syswrite($s,$check,length($check));
+			print "checksum fail, skipping~!\n" unless $check=1;
+			next unless $check=1;
 			#close($s);
 			#undef $s;
 			print "connection closed.\n" if $tdebug;
