@@ -165,7 +165,6 @@ __EOT
 sub read_records() {
 	$client=shift;
 	my $counter = 1;
-	$client = server_connect(0);
   while ( $record = readSnortUnifiedRecord() ) {
 	$event[0]=$config{'tip_sensor'};
     $event[1]=$config{'sensor_int'};
@@ -189,11 +188,14 @@ sub read_records() {
 		}
     }
     if ($event[24] && $event[24] ne "") {
-		my $p_event = pack("a32 a32 I I L L L I I I I L L I I s s s s L L L s s a*",@event);
+		my $p_event = pack("a32 a32 I I L L L I I I I L L I I S S S S L L L S S a*",@event);
 		my $md5sum = md5_hex( $p_event );
 		$p_event = $md5sum.$p_event;
 		print "** Sending Data **\n" if $debug;
+		$client = server_connect(0);
 		data_sender($p_event,$client);
+		server_connect(1);
+		undef $client;
 		undef @event;
 		$counter=1;
 	}
@@ -301,6 +303,7 @@ sub server_connect {
 sub get_latest_file($) {
   my $filemask = shift;
   my @ls = <$filemask*>;
+  #print @ls;
   my $len = @ls;
   my $uf_file = "";
 
@@ -322,8 +325,8 @@ sub data_sender {
 		unless ($client->errstr) {
 			syswrite($client,$data_send,length($data_send));
 			sysread($client,$buf,128);
-			print "Checksum Verify: $buf\n" if ($termdebug && $buf eq 1);
-			die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
+			print "Checksum Verified!: $buf\n\n" if ($termdebug && $buf eq 1);
+			die "Checksum epic FAIL! $buf\n\n" unless $buf eq 1;
 		}
 		croak ($client->errstr ."$!") if ($client->errstr);
 	}
