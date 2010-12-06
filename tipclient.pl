@@ -165,6 +165,7 @@ __EOT
 sub read_records() {
 	$client=shift;
 	my $counter = 1;
+	$client = server_connect(0);
   while ( $record = readSnortUnifiedRecord() ) {
 	$event[0]=$config{'tip_sensor'};
     $event[1]=$config{'sensor_int'};
@@ -315,8 +316,8 @@ sub get_latest_file($) {
 
 # Send the prepared data to the server!
 sub data_sender {
+	my $client = shift;
 	unless ($localtest) {
-		$client = server_connect(0);
 		my $data_send = shift;
 
 		unless ($client->errstr) {
@@ -326,8 +327,6 @@ sub data_sender {
 			die "Checksum epic FAIL! $buf\n" unless $buf eq 1;
 		}
 		croak ($client->errstr ."$!") if ($client->errstr);
-		server_connect(1);
-		undef $client;
 	}
 }
 
