@@ -56,9 +56,10 @@ $SIG{CHLD}= \&REAPER;
 while (1) {
 	carp "waiting for next connection.\n" if $tdebug;
 	while(($s = $sock->accept())) {
-		my $pid = fork;
-		die "fork: $!" unless defined $pid;
-		print "Pid: $pid\n" if $tdebug;
+		#my $pid = fork;
+		my $pid = 0;
+		#die "fork: $!" unless defined $pid;
+		#print "Pid: $pid\n" if $tdebug;
 		if ($pid == 0) {
 			my ($peer_cert, $subject_name, $issuer_name, $date, $str);
 			if( ! $s ) {
@@ -178,7 +179,7 @@ while (1) {
 			$dbh->do("INSERT INTO data (sid,cid,data_payload) VALUES ('$sensorid','$cid','$pkthex')") or errorkill($dbh->errstr);
 			$dbh->do("UPDATE sensor SET last_cid = '$cid' WHERE sid = '$sensorid'") or errorkill($dbh->errstr);
 			
-			exit(0);
+			#exit(0);
 		}
 	}
 }
