@@ -56,17 +56,19 @@ use Carp  qw(cluck);
 use Socket;
 use Fcntl qw(:flock);
 use SnortUnified::Handlers qw(:ALL);
-use NetPacket::Ethernet;
-use NetPacket::IP qw(:ALL);
-use NetPacket::TCP qw(:ALL);
-use NetPacket::UDP qw(:ALL);
-use NetPacket::ICMP qw(:ALL);
+
+# XXX - JRB - Move all of this functionality to Net::Packet, it is maintained
+# use NetPacket::Ethernet;
+# use NetPacket::IP qw(:ALL);
+# use NetPacket::TCP qw(:ALL);
+# use NetPacket::UDP qw(:ALL);
+# use NetPacket::ICMP qw(:ALL);
 
 my $class_self;
 
 BEGIN {
    $class_self = __PACKAGE__;
-   $VERSION = "1.5devel20070806";
+   $VERSION = "1.620110126";
 }
 my $LICENSE = "GNU GPL see http://www.gnu.org/licenses/gpl.txt for more information.";
 sub Version() { "$class_self v$VERSION - Copyright (c) 2007 Jason Brvenik" };
@@ -89,6 +91,7 @@ sub License() { Version . "\nLicensed under the $LICENSE" };
                  $log_fields
                  $alert2_fields
                  $log2_fields
+                 $extra_data_fields
                  $flock_mode
                  $LOGMAGIC
                  $ALERTMAGIC
@@ -108,6 +111,7 @@ sub License() { Version . "\nLicensed under the $LICENSE" };
                  $UNIFIED_ALERT
                  $UNIFIED2
                  $UNIFIED2_TYPES
+                 $UNIFIED2_EXTRA_DATA
              );
 
 %EXPORT_TAGS = (
@@ -141,6 +145,7 @@ sub License() { Version . "\nLicensed under the $LICENSE" };
                                     $UNIFIED2_PORTSCAN
                                     $UNIFIED2_IDS_EVENT_IPV6
                                     $UNIFIED2_TYPES
+                                    $UNIFIED2_EXTRA_DATA
                                   )
                                 ],
                unified_types => [qw(
@@ -167,22 +172,60 @@ our $UNIFIED_LOG   = "LOG";
 our $UNIFIED_ALERT = "ALERT";
 our $UNIFIED2      = "UNIFIED2";
 
-our $UNIFIED2_EVENT          = 1;
-our $UNIFIED2_PACKET         = 2;
-our $UNIFIED2_IDS_EVENT      = 7;
-our $UNIFIED2_EVENT_EXTENDED = 66;
-our $UNIFIED2_PERFORMANCE    = 67;
-our $UNIFIED2_PORTSCAN       = 68;
-our $UNIFIED2_IDS_EVENT_IPV6 = 72;
+our $UNIFIED2_EVENT                = 1;
+our $UNIFIED2_PACKET               = 2;
+our $UNIFIED2_IDS_EVENT            = 7;
+our $UNIFIED2_EVENT_EXTENDED       = 66;
+our $UNIFIED2_PERFORMANCE          = 67;
+our $UNIFIED2_PORTSCAN             = 68;
+our $UNIFIED2_IDS_EVENT_IPV6       = 72;
+our $UNIFIED2_IDS_EVENT_MPLS       = 99;
+our $UNIFIED2_IDS_EVENT_IPV6_MPLS  = 100;
+our $UNIFIED2_IDS_EVENT_VLAN       = 104;
+our $UNIFIED2_IDS_EVENT_IPV6_VLAN  = 105;
+our $UNIFIED2_EXTRA_DATA           = 110;
 
 our $UNIFIED2_TYPES = {
-        $UNIFIED2_EVENT             => 'EVENT',
-        $UNIFIED2_PACKET            => 'PACKET',
-        $UNIFIED2_IDS_EVENT         => 'IPS4 EVENT',
-        $UNIFIED2_EVENT_EXTENDED    => 'EXTENDED',
-        $UNIFIED2_PERFORMANCE       => 'PERFORMANCE',
-        $UNIFIED2_PORTSCAN          => 'PORTSCAN',
-        $UNIFIED2_IDS_EVENT_IPV6    => 'IPS6 EVENT',
+        $UNIFIED2_EVENT                => 'EVENT',
+        $UNIFIED2_PACKET               => 'PACKET',
+        $UNIFIED2_IDS_EVENT            => 'IPV4 EVENT',
+        $UNIFIED2_EVENT_EXTENDED       => 'EXTENDED',
+        $UNIFIED2_PERFORMANCE          => 'PERFORMANCE',
+        $UNIFIED2_PORTSCAN             => 'PORTSCAN',
+        $UNIFIED2_IDS_EVENT_IPV6       => 'IPV6 EVENT',
+        $UNIFIED2_IDS_EVENT_MPLS       => 'MPLS EVENT',
+        $UNIFIED2_IDS_EVENT_IPV6_MPLS  => 'IPV6 MPLS EVENT',
+        $UNIFIED2_IDS_EVENT_VLAN       => 'VLAN EVENT',
+        $UNIFIED2_IDS_EVENT_IPV6_VLAN  => 'IPV6 VLAN EVENT',
+        $UNIFIED2_EXTRA_DATA           => 'EXTRA DATA',
+
+};
+
+my $unified2_type_masks = {
+        $UNIFIED2_EVENT          => 'N11n2c2',
+        $UNIFIED2_PACKET         => 'N7',
+        $UNIFIED2_IDS_EVENT      => 'N11n2c2',
+        $UNIFIED2_EVENT_EXTENDED => '',
+        $UNIFIED2_PERFORMANCE    => '',
+        $UNIFIED2_PORTSCAN       => '',
+        # Patch from Martin Schütte - info...at...mschuette.name
+        $UNIFIED2_IDS_EVENT_IPV6 => 'N9N4N4n2c2',
+        # Support 104 and 105 - sfutil/Unified2_common.h
+        $UNIFIED2_IDS_EVENT_VLAN       => 'N11n2c4Nn2',
+        $UNIFIED2_IDS_EVENT_IPV6_VLAN  => 'N9N4N4n2c4Nn2',
+        # "sfutil/Unified2_common.h" line 142
+        # This is a variable length record, like a packet record
+        # Last field is the length of the record inclusive of header
+        # Within the header is a type dsignation that needs handling
+        # "sfutil/Unified2_common.h" line 145
+        #     EVENT_INFO_XFF_IPV4 = 1,
+        #     EVENT_INFO_XFF_IPV6 ,
+        #     EVENT_INFO_REVIEWED_BY,
+        #     EVENT_INFO_GZIP_DATA
+        # /* Length of the data + sizeof(blob_length) + sizeof(data_type)*/
+        # ... blah blah blah you end up with N9 after it all stacks up
+        $UNIFIED2_EXTRA_DATA           => 'N9',
+
 };
 
 our $U2_PACKET_FLAG          = 1;
@@ -266,21 +309,6 @@ my $unified2_packet_fields = [
 
 our $log2_fields = $unified2_packet_fields;
 
-my $unified2_type_masks = {
-        $UNIFIED2_EVENT          => 'N11n2c2',
-        # XXX - Need to verify this struct
-        # $UNIFIED2_PACKET         => 'N7c*',
-        $UNIFIED2_PACKET         => 'N7',
-        # XXX - Need to verify this struct
-        $UNIFIED2_IDS_EVENT      => 'N11n2c2',
-        # XXX - Need to track down these structs
-        $UNIFIED2_EVENT_EXTENDED => '',
-        $UNIFIED2_PERFORMANCE    => '',
-        $UNIFIED2_PORTSCAN       => '',
-        # XXX - Need to track down real size of in6_addr ( using N3N3 right now )
-        $UNIFIED2_IDS_EVENT_IPV6 => 'N9N3N3n2c2',
-};
-
 my $unified2_header = [
         'type',
         'length',
@@ -357,6 +385,76 @@ my $log64_fields = [
 ];
 
 our $log_fields = $log32_fields;
+
+# set up the new IDS events - type 104
+# sfutil/Unified2_common.h
+my $vlan_alert_fields32 = [
+    'sensor_id',
+    'event_id',
+    'event_second',
+    'event_microsecond',
+    'signature_id',
+    'generator_id',
+    'signature_revision',
+    'classification_id',
+    'priority_id',
+    'ip_source',
+    'ip_destination',
+    'sport_itype',
+    'dport_icode',
+    'protocol',
+    'impact_flag', # //overloads packet_action
+    'impact',
+    'blocked',
+    'mpls_label',
+    'vlanId',
+    # 'pad2', # Policy ID
+    'policyID',
+];
+
+our $vlan_alerts = $vlan_alert_fields32;
+
+# type 105
+my $vlan_alert_fields64 = [
+    'sensor_id',
+    'event_id',
+    'event_second',
+    'event_microsecond',
+    'signature_id',
+    'generator_id',
+    'signature_revision',
+    'classification_id',
+    'priority_id',
+    'in6_addr ip_source',
+    'in6_addr ip_destination',
+    'sport_itype',
+    'dport_icode',
+    'protocol',
+    'impact_flag',
+    'impact',
+    'blocked',
+    'mpls_label',
+    'vlanId',
+    'pad2', # /*could be IPS Policy local id to support local sensor alerts*/
+];
+
+# data_blob could contain any of the types, implementing generic handling for now
+# you will need to register a handler for how _you_ want to handle the data 
+# I'm providing an example for XFF
+
+my $unified2_extra_data_fields = [
+    'event_type',
+    'event_length',
+    'sensor_id',
+    'event_id',
+    'tv_sec',
+    'type',
+    'datatype',
+    'bloblength',
+    'data_blob',
+];
+
+our $extra_data_fields = $unified2_extra_data_fields;
 
 ###############################################################
 # Close the unified file
@@ -449,7 +547,6 @@ sub openSnortUnified($) {
        $UF->{'TYPE'} = $UNIFIED2;
        # The rest doesn't really matter because it changes from record to record
        debug("No match on magic, assuming unified2");
-       # die("XXX - Finish unified2 handling");
      }
   } else { # assume 32bit
      debug("Handling unified file with 32bit timevals");
@@ -488,7 +585,6 @@ sub openSnortUnified($) {
        $alert_fields = $unified2_ids_fields;
        # The rest doesn't really matter because it changes from record to record
        debug("No match on magic, assuming unified2");
-       # die("XXX - Finish unified2 handling");
      }
   }
   
@@ -506,6 +602,8 @@ sub openSnortUnified($) {
 # if we are not working with a unified2 file
 # return -1 if we have failed to pass registered qualifiers
 # otherwise return $HASH containing the record
+# JRB - This whole bit needs to be redone, it has outlived
+# the quick usecase and is simply ugly
 ###############################################################
 sub readSnortUnified2Record() {
     my @record = undef;
@@ -574,6 +672,79 @@ sub readSnortUnified2Record() {
             debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
         }
         exec_handler("unified2_event", $UF_Record);
+
+    } elsif ($UF_Record->{'TYPE'} eq $UNIFIED2_IDS_EVENT_IPV6) {  # added, ms
+        debug("Handling an IDS IPv6 event from the unified2 file");
+        $UF_Record->{'FIELDS'} = $alert2_fields;
+        debug("Unpacking with mask " .  $unified2_type_masks->{$UNIFIED2_IDS_EVENT_IPV6});
+        @record = unpack($unified2_type_masks->{$UNIFIED2_IDS_EVENT_IPV6}, $buffer);
+
+        # N9 - first 9 uint32 fields:
+        foreach my $fld (@{$UF_Record->{'FIELDS'}}[0 .. 8]) {
+            $UF_Record->{$fld} = @record[$i++];
+            debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
+        }
+        # XXX JRB - need to look here at the "right" way to do it, all addresses are thus far represented as numbers
+        # XXX JRB - and this is a deviation from that. Given that Socket6 ans INET6 are not yet part of CORE
+        # XXX JRB - I'm inclined to leave it as is until someone complains - look at Net::INET6Glue or AnyEvent 
+        # XXX JRB - as easy methods but I'm guessing perl6 is out before perl5 ipv6 support is stable 
+        # N4N4 - the IPv6 addrs:
+        foreach my $fld (@{$UF_Record->{'FIELDS'}}[9 .. 10]) {
+			my @unp_tmp = unpack('n8', pack('N4', @record[$i .. $i+3]));
+           $UF_Record->{$fld} = sprintf('%x:%x:%x:%x:%x:%x:%x:%x', @unp_tmp);
+            $i += 4;
+            debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
+        }
+        # n2c2 - last fields:
+        foreach my $fld (@{$UF_Record->{'FIELDS'}}[11 .. 14]) {
+            $UF_Record->{$fld} = @record[$i++];
+            debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
+        }
+        exec_handler("unified2_event", $UF_Record);
+    } elsif ($UF_Record->{'TYPE'} eq $UNIFIED2_IDS_EVENT_VLAN ) {
+        debug("Handling a type $UNIFIED2_IDS_EVENT_VLAN IDS event from the unified2 file");
+        $UF_Record->{'FIELDS'} = $vlan_alert_fields32;
+        debug("Unpacking with mask " . $unified2_type_masks->{$UNIFIED2_IDS_EVENT_VLAN});
+        @record = unpack($unified2_type_masks->{$UNIFIED2_IDS_EVENT_VLAN}, $buffer);
+        foreach my $fld (@{$UF_Record->{'FIELDS'}}) {
+            $UF_Record->{$fld} = @record[$i++];
+            debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
+        }
+        exec_handler("unified2_event", $UF_Record);
+
+    } elsif ($UF_Record->{'TYPE'} eq $UNIFIED2_IDS_EVENT_IPV6_VLAN ) {
+        debug("Handling a type $UNIFIED2_IDS_EVENT_VLAN IDS event from the unified2 file");
+        $UF_Record->{'FIELDS'} = $vlan_alert_fields64;
+        debug("Unpacking with mask " . $unified2_type_masks->{$UNIFIED2_IDS_EVENT_IPV6_VLAN});
+        @record = unpack($unified2_type_masks->{$UNIFIED2_IDS_EVENT_IPV6_VLAN}, $buffer);
+        foreach my $fld (@{$UF_Record->{'FIELDS'}}) {
+            $UF_Record->{$fld} = @record[$i++];
+            debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
+        }
+        exec_handler("unified2_event", $UF_Record);
+    
+    } elsif ($UF_Record->{'TYPE'} eq $UNIFIED2_EXTRA_DATA) {
+       debug("Handling a type $UNIFIED2_EXTRA_DATA (EXTRA DATA) record from the unified2 file");
+       $UF_Record->{'FIELDS'} = $extra_data_fields;
+       debug("Unpacking with mask " , $unified2_type_masks->{$UNIFIED2_EXTRA_DATA});
+       @record = unpack($unified2_type_masks->{$UNIFIED2_EXTRA_DATA}, $buffer);
+       foreach my $fld (@{$UF_Record->{'FIELDS'}}) {
+           if ($fld ne 'data_blob') {
+                $UF_Record->{$fld} = @record[$i++];
+                debug("Field " . $fld . " is set to " . $UF_Record->{$fld});
+           } else {
+               debug("Filling in data_blob with " . $UF_Record->{'bloblength'} . " byes");
+               # XXX - JRB - I'm stealing this from the packet code above but WTH is it * -1?
+               # Something tells me it should be -1 not * -1 too bad I didn't comment it
+               $UF_Record->{$fld} = substr($buffer, $UF_Record->{'bloblength'} * -1, $UF_Record->{'bloblength'});
+               
+               # With XFF (type 1) you have two size fields and then the data. You have the size of the blob,
+               # the size of the data, and the data
+               # to handle it in your application you would do
+               # register_handler("unified2_extra_data", \&xff_handler)
+           }
+       }
+       exec_handler("unified2_extra_data", $UF_Record);
     } else {
         debug("Handling of type " . $UF_Record->{'TYPE'} . " not implemented yet");
         exec_handler("unified2_unhandled", $UF_Record);
@@ -666,7 +837,7 @@ sub old_readSnortUnifiedRecord() {
 
     foreach my $field (@{$UF->{'FIELDS'}}) {
         if ( $field eq 'pkt' ) {
-                if ( $UF_Record->{'caplen'} >= 65536 ) {
+	        if ( $UF_Record->{'caplen'} >= 65536 ) {
                 debug(sprintf("BAIL: Got an absurd packet size of %d. Assuming corrupt unified file\n",$UF_Record->{'caplen'}));
                 return undef;
             }
